@@ -1,0 +1,10 @@
+node_modules/
+dist/
+work/
+backups/
+*.log
+*.zip
+*.exe
+.DS_Store
+Thumbs.db
+

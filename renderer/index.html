@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>昔涟键盘控制台</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="stars" aria-hidden="true"></div>
+    <main class="shell">
+      <header class="hero">
+        <div>
+          <p class="eyebrow">FULING OFFLINE CONSOLE · ALPHA</p>
+          <h1>昔涟 · 往昔的涟漪</h1>
+          <p class="subtitle">独立 HID 连接，不加载网页，不上传设备数据。</p>
+        </div>
+        <div class="mode-pill">安全写入 · 自动备份</div>
+      </header>
+
+      <section class="status-card">
+        <div class="device-orb" id="device-orb"><span>✦</span></div>
+        <div class="status-main">
+          <div class="status-line">
+            <span class="dot" id="status-dot"></span>
+            <strong id="status-title">正在检测设备…</strong>
+          </div>
+          <p id="status-message">正在读取接收器状态与键盘身份。</p>
+        </div>
+        <button id="refresh-button" type="button">重新检测</button>
+      </section>
+
+      <section class="grid">
+        <article class="metric">
+          <span>电量</span>
+          <strong id="battery">--%</strong>
+          <div class="battery-track"><i id="battery-fill"></i></div>
+        </article>
+        <article class="metric">
+          <span>连接方式</span>
+          <strong id="connection">--</strong>
+          <small>当前试用版读取 2.4G 接收器</small>
+        </article>
+        <article class="metric">
+          <span>内部设备 ID</span>
+          <strong id="identity">--------</strong>
+          <small id="recognized">等待识别</small>
+        </article>
+        <article class="metric">
+          <span>接收器</span>
+          <strong id="receiver">3151:5052</strong>
+          <small id="receiver-state">正在检测</small>
+        </article>
+      </section>
+
+      <section class="details-card">
+        <div>
+          <span class="label">底层硬件配置</span>
+          <strong id="hardware-profile">Fuling Air 108 metallic</strong>
+        </div>
+        <div>
+          <span class="label">协议</span>
+          <code id="protocol">ry6602_fl_k2509_3m_1k_1k</code>
+        </div>
+        <div>
+          <span class="label">能力</span>
+          <span>108 键 · 3 层 · 主灯 · 侧灯 · 三模</span>
+        </div>
+      </section>
+
+      <section class="keymap-card">
+        <div class="section-title">
+          <div>
+            <h2>按键映射</h2>
+            <p>安全单键写入：读取并备份全部三层后，每次只修改一个物理键并回读校验。</p>
+          </div>
+          <div class="lighting-actions">
+            <button id="read-keymap" type="button">读取三层键位</button>
+            <button id="restore-keymap" class="secondary" type="button" disabled>恢复本次改键</button>
+          </div>
+        </div>
+        <fieldset class="keymap-editor" id="keymap-editor" disabled>
+          <label>配置层
+            <select id="keymap-layer">
+              <option value="0">第 1 层</option>
+              <option value="1">第 2 层</option>
+              <option value="2">第 3 层</option>
+            </select>
+          </label>
+          <label>物理按键<select id="keymap-source"></select></label>
+          <div class="mapping-arrow">→</div>
+          <label>映射为<select id="keymap-target"></select></label>
+          <button id="apply-keymap" class="primary" type="button">应用并校验</button>
+          <div class="current-binding">当前键值：<strong id="current-binding">--</strong></div>
+        </fieldset>
+        <p class="operation-status" id="keymap-status">键盘在线后，点击“读取三层键位”。读取约需十几秒。</p>
+      </section>
+
+      <section class="lighting-card" id="lighting-card">
+        <div class="section-title">
+          <div>
+            <h2>灯光控制</h2>
+            <p>首次读取会自动备份当前主灯和侧灯；每次写入后都会回读校验。</p>
+          </div>
+          <div class="lighting-actions">
+            <button id="read-lighting" type="button">读取灯效</button>
+            <button id="restore-lighting" class="secondary" type="button" disabled>恢复启动时灯效</button>
+          </div>
+        </div>
+        <div class="light-grid">
+          <fieldset class="light-panel" id="main-light-panel" disabled>
+            <legend>主键区灯光</legend>
+            <label>效果<select id="main-effect"></select></label>
+            <label>颜色<input id="main-color" type="color" value="#EE3F85" /></label>
+            <label>亮度 <output id="main-bright-value">4</output><input id="main-bright" type="range" min="0" max="4" step="1" value="4" /></label>
+            <label>速度 <output id="main-speed-value">4</output><input id="main-speed" type="range" min="0" max="4" step="1" value="4" /></label>
+            <label class="check"><input id="main-dazzle" type="checkbox" /> 炫彩模式</label>
+            <button id="apply-main" class="primary" type="button">应用主灯</button>
+          </fieldset>
+          <fieldset class="light-panel" id="side-light-panel" disabled>
+            <legend>侧灯</legend>
+            <label>效果<select id="side-effect"></select></label>
+            <label>颜色<input id="side-color" type="color" value="#FFFFFF" /></label>
+            <label>亮度 <output id="side-bright-value">4</output><input id="side-bright" type="range" min="0" max="4" step="1" value="4" /></label>
+            <label>速度 <output id="side-speed-value">3</output><input id="side-speed" type="range" min="0" max="4" step="1" value="3" /></label>
+            <label class="check"><input id="side-dazzle" type="checkbox" /> 炫彩模式</label>
+            <button id="apply-side" class="primary" type="button">应用侧灯</button>
+          </fieldset>
+        </div>
+        <p class="operation-status" id="lighting-status">键盘在线后，点击“读取灯效”。</p>
+      </section>
+
+      <section class="locked-features">
+        <h2>配置功能</h2>
+        <div class="feature-row">
+          <button class="available" disabled>按键映射 <small>标准单键映射已开放</small></button>
+          <button class="available" disabled>灯光控制 <small>主灯与侧灯已开放</small></button>
+          <button disabled>宏设置 <small>协议验证中</small></button>
+          <button disabled>休眠设置 <small>协议验证中</small></button>
+        </div>
+        <p>当前已开放具备备份、回读校验和恢复流程的标准单键映射与灯光配置；宏和休眠功能仍保持锁定。</p>
+      </section>
+    </main>
+    <script src="app.js"></script>
+  </body>
+</html>

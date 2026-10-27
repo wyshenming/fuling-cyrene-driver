@@ -1,0 +1,51 @@
+{
+  "name": "fuling-cyrene-driver",
+  "version": "0.3.0",
+  "description": "Experimental offline driver for the Fuling Cyrene keyboard.",
+  "main": "main.js",
+  "private": true,
+  "license": "MIT",
+  "scripts": {
+    "devices": "node probe.js --list",
+    "probe": "node probe.js --probe",
+    "start": "electron .",
+    "pack": "electron-builder --win portable"
+  },
+  "dependencies": {
+    "node-hid": "3.4.0"
+  },
+  "devDependencies": {
+    "electron": "45.0.0",
+    "electron-builder": "26.18.0"
+  },
+  "build": {
+    "appId": "local.fuling.cyrene.driver",
+    "productName": "Cyrene Keyboard Console",
+    "asar": true,
+    "npmRebuild": false,
+    "asarUnpack": [
+      "node_modules/node-hid/**"
+    ],
+    "files": [
+      "main.js",
+      "preload.js",
+      "hid-service.js",
+      "renderer/**/*",
+      "package.json"
+    ],
+    "directories": {
+      "output": "dist"
+    },
+    "win": {
+      "target": [
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "artifactName": "Fuling-Cyrene-Driver-${version}-Portable.${ext}"
+    }
+  }
+}

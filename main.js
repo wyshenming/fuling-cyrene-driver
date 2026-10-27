@@ -1,0 +1,126 @@
+'use strict';
+
+const path = require('path');
+const fs = require('fs/promises');
+const { app, BrowserWindow, ipcMain, Menu } = require('electron');
+const {
+  inspectKeyboard,
+  inspectLighting,
+  writeLighting,
+  inspectKeymap,
+  remapStandardKey,
+  writeKeyMatrixValue
+} = require('./hid-service');
+
+let mainWindow = null;
+let originalLighting = null;
+let originalKeymap = null;
+const changedKeys = new Set();
+let hidQueue = Promise.resolve();
+
+function withHidLock(operation) {
+  const result = hidQueue.then(operation, operation);
+  hidQueue = result.catch(() => {});
+  return result;
+}
+
+async function backupLighting(lighting) {
+  const directory = path.join(app.getPath('userData'), 'lighting-backups');
+  await fs.mkdir(directory, { recursive: true });
+  const capturedAt = new Date().toISOString();
+  const backup = { deviceId: 4112, protocol: 'ry6602_fl_k2509_3m_1k_1k', capturedAt, ...lighting };
+  const safeStamp = capturedAt.replaceAll(':', '-');
+  await fs.writeFile(path.join(directory, `lighting-${safeStamp}.json`), JSON.stringify(backup, null, 2), 'utf8');
+  await fs.writeFile(path.join(directory, 'latest.json'), JSON.stringify(backup, null, 2), 'utf8');
+  return backup;
+}
+
+async function readAndRememberLighting() {
+  const lighting = await inspectLighting();
+  if (!originalLighting) originalLighting = await backupLighting(lighting);
+  return lighting;
+}
+
+async function backupKeymap(keymap) {
+  const directory = path.join(app.getPath('userData'), 'keymap-backups');
+  await fs.mkdir(directory, { recursive: true });
+  const capturedAt = new Date().toISOString();
+  const backup = { deviceId: 4112, protocol: 'ry6602_fl_k2509_3m_1k_1k', capturedAt, ...keymap };
+  const safeStamp = capturedAt.replaceAll(':', '-');
+  await fs.writeFile(path.join(directory, `keymap-${safeStamp}.json`), JSON.stringify(backup, null, 2), 'utf8');
+  await fs.writeFile(path.join(directory, 'latest.json'), JSON.stringify(backup, null, 2), 'utf8');
+  return backup;
+}
+
+async function readAndRememberKeymap() {
+  const keymap = await inspectKeymap();
+  if (!originalKeymap) originalKeymap = await backupKeymap(keymap);
+  return keymap;
+}
+
+function createWindow() {
+  mainWindow = new BrowserWindow({
+    width: 1180,
+    height: 760,
+    minWidth: 940,
+    minHeight: 640,
+    title: '昔涟键盘控制台',
+    backgroundColor: '#090818',
+    autoHideMenuBar: true,
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      nodeIntegration: false,
+      contextIsolation: true,
+      sandbox: true,
+      webSecurity: true
+    }
+  });
+
+  mainWindow.setMenu(Menu.buildFromTemplate([]));
+  mainWindow.loadFile(path.join(__dirname, 'renderer', 'index.html'));
+  mainWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  mainWindow.on('closed', () => { mainWindow = null; });
+}
+
+ipcMain.handle('keyboard:inspect', async () => withHidLock(inspectKeyboard));
+ipcMain.handle('lighting:get', async () => withHidLock(readAndRememberLighting));
+ipcMain.handle('lighting:apply', async (_event, channel, setting) => withHidLock(async () => {
+  if (!originalLighting) await readAndRememberLighting();
+  return writeLighting(channel, setting);
+}));
+ipcMain.handle('lighting:restore', async () => withHidLock(async () => {
+  if (!originalLighting) throw new Error('本次运行尚未建立灯效备份');
+  const main = await writeLighting('main', originalLighting.main);
+  const side = await writeLighting('side', originalLighting.side);
+  return { main, side };
+}));
+ipcMain.handle('keymap:get', async () => withHidLock(readAndRememberKeymap));
+ipcMain.handle('keymap:apply', async (_event, layer, physicalIndex, targetHid) => withHidLock(async () => {
+  if (!originalKeymap) await readAndRememberKeymap();
+  const result = await remapStandardKey(layer, physicalIndex, targetHid);
+  changedKeys.add(`${layer}:${physicalIndex}`);
+  return result;
+}));
+ipcMain.handle('keymap:restore', async () => withHidLock(async () => {
+  if (!originalKeymap) throw new Error('本次运行尚未建立键位备份');
+  for (const key of Array.from(changedKeys)) {
+    const [layer, physicalIndex] = key.split(':').map(Number);
+    const original = originalKeymap.layers[layer].slice(physicalIndex * 4, physicalIndex * 4 + 4);
+    await writeKeyMatrixValue(layer, physicalIndex, original);
+    changedKeys.delete(key);
+  }
+  return {
+    layers: originalKeymap.layers,
+    defaultMatrix: originalKeymap.defaultMatrix,
+    keyCount: originalKeymap.keyCount
+  };
+}));
+
+app.whenReady().then(createWindow);
+app.on('activate', () => {
+  if (BrowserWindow.getAllWindows().length === 0) createWindow();
+});
+app.on('window-all-closed', () => {
+  if (process.platform !== 'darwin') app.quit();
+});
+
