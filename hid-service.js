@@ -4,6 +4,8 @@ const HID = require('node-hid');
 
 const RECEIVER_VID = 0x3151;
 const RECEIVER_PID = 0x5052;
+const KEYBOARD_USB_VID = 0x38a9;
+const KEYBOARD_USB_PID = 0x0017;
 const DEVICE_ID = 4112;
 const delay = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
 
@@ -16,6 +18,12 @@ function findReceiver() {
     device.vendorId === RECEIVER_VID && device.productId === RECEIVER_PID
   ));
   return matches.find((device) => device.usagePage === 0xffff && device.usage === 2) || null;
+}
+
+function isUsbPowerPresent() {
+  return HID.devices().some((device) => (
+    device.vendorId === KEYBOARD_USB_VID && device.productId === KEYBOARD_USB_PID
+  ));
 }
 
 function encodeFeature(command, checksumByte = null) {
@@ -248,6 +256,168 @@ async function readKeyLayerFromDevice(device, layer) {
   return matrix;
 }
 
+async function readFnLayerFromDevice(device, systemCode) {
+  if (![0, 1].includes(systemCode)) throw new Error('Fn 系统编号无效');
+  const matrix = [];
+  for (let chunk = 0; chunk < 8; chunk += 1) {
+    const command = Buffer.alloc(64);
+    command[0] = 0x90;
+    command[1] = systemCode;
+    command[2] = 0;
+    command[3] = 0xff;
+    command[4] = chunk;
+    let response = null;
+    for (let attempt = 0; attempt < 3 && (!response || response.length < 64); attempt += 1) {
+      if (attempt > 0) await delay(250);
+      response = await keyboardRead(device, command, 7);
+    }
+    if (!response || response.length < 64) throw new Error(`Fn 键位分片 ${chunk + 1} 读取失败`);
+    matrix.push(...response.slice(0, 64));
+    await delay(40);
+  }
+  return matrix;
+}
+
+async function readMacroSlotFromDevice(device, slot) {
+  if (!Number.isInteger(slot) || slot < 0 || slot >= 50) throw new Error('宏槽编号无效');
+  const data = [];
+  for (let chunk = 0; chunk < 4; chunk += 1) {
+    let response = null;
+    for (let attempt = 0; attempt < 3 && (!response || response.length < 64); attempt += 1) {
+      if (attempt > 0) await delay(250);
+      response = await keyboardRead(device, [0x8b, slot, chunk], 7);
+    }
+    if (!response || response.length < 64) throw new Error(`宏槽 ${slot} 分片 ${chunk + 1} 读取失败`);
+    data.push(...response.slice(0, 64));
+    await delay(40);
+  }
+  return data;
+}
+
+function findMacroReferences(matrices) {
+  const references = [];
+  for (const [scope, matrix] of Object.entries(matrices)) {
+    for (let offset = 0; offset < matrix.length; offset += 4) {
+      if (matrix[offset] === 9 && matrix[offset + 2] < 50) {
+        references.push({ scope, physicalIndex: offset / 4, macroType: matrix[offset + 1], slot: matrix[offset + 2] });
+      }
+    }
+  }
+  return references;
+}
+
+async function inspectMacroState() {
+  const receiver = findReceiver();
+  if (!receiver) throw new Error('未检测到 2.4G 接收器');
+  const device = new HID.HID(receiver.path);
+  try {
+    const status = await queryStatus(device);
+    if (!status.online || status.rfBoot) throw new Error('键盘未在线，请先唤醒键盘');
+    const layers = [];
+    for (let layer = 0; layer < 3; layer += 1) layers.push(await readKeyLayerFromDevice(device, layer));
+    const fnWin = await readFnLayerFromDevice(device, 0);
+    const fnMac = await readFnLayerFromDevice(device, 1);
+    const matrices = { layer0: layers[0], layer1: layers[1], layer2: layers[2], fnWin, fnMac };
+    const references = findMacroReferences(matrices);
+    const used = new Set(references.map((reference) => reference.slot));
+    const freeSlot = Array.from({ length: 50 }, (_, index) => index).find((slot) => !used.has(slot));
+    if (freeSlot == null) throw new Error('没有可用的宏槽');
+    const freeSlotData = await readMacroSlotFromDevice(device, freeSlot);
+    return {
+      layers,
+      fnWin,
+      fnMac,
+      defaultMatrix: Array.from(DEFAULT_MATRIX),
+      references,
+      freeSlot,
+      freeSlotData
+    };
+  } finally {
+    device.close();
+  }
+}
+
+function encodeMacroText(text, keyDelay = 35, repeatCount = 1) {
+  if (typeof text !== 'string' || text.length === 0) throw new Error('宏文本不能为空');
+  if (!Number.isInteger(keyDelay) || keyDelay < 10 || keyDelay > 1000) throw new Error('按键间隔必须为 10–1000 毫秒');
+  if (!Number.isInteger(repeatCount) || repeatCount < 1 || repeatCount > 65535) throw new Error('循环次数无效');
+  const direct = {};
+  for (let index = 0; index < 26; index += 1) direct[String.fromCharCode(97 + index)] = { hid: 4 + index, shift: false };
+  for (let index = 1; index <= 9; index += 1) direct[String(index)] = { hid: 29 + index, shift: false };
+  direct['0'] = { hid: 39, shift: false };
+  Object.assign(direct, {
+    ' ': { hid: 44, shift: false }, '\n': { hid: 40, shift: false }, '-': { hid: 45, shift: false },
+    '=': { hid: 46, shift: false }, '[': { hid: 47, shift: false }, ']': { hid: 48, shift: false },
+    '\\': { hid: 49, shift: false }, ';': { hid: 51, shift: false }, "'": { hid: 52, shift: false },
+    '`': { hid: 53, shift: false }, ',': { hid: 54, shift: false }, '.': { hid: 55, shift: false }, '/': { hid: 56, shift: false }
+  });
+  const shifted = { '!': '1', '@': '2', '#': '3', '$': '4', '%': '5', '^': '6', '&': '7', '*': '8', '(': '9', ')': '0', '_': '-', '+': '=', '{': '[', '}': ']', '|': '\\', ':': ';', '"': "'", '~': '`', '<': ',', '>': '.', '?': '/' };
+  const events = [];
+  for (const char of text) {
+    let entry = direct[char];
+    if (!entry && char >= 'A' && char <= 'Z') entry = { ...direct[char.toLowerCase()], shift: true };
+    if (!entry && shifted[char]) entry = { ...direct[shifted[char]], shift: true };
+    if (!entry) throw new Error(`暂不支持字符：${char}`);
+    if (entry.shift) events.push({ hid: 225, down: true, delay: 10 });
+    events.push({ hid: entry.hid, down: true, delay: 25 });
+    events.push({ hid: entry.hid, down: false, delay: entry.shift ? 10 : keyDelay });
+    if (entry.shift) events.push({ hid: 225, down: false, delay: keyDelay });
+  }
+  const output = Buffer.alloc(256);
+  output[0] = repeatCount & 0xff;
+  output[1] = (repeatCount >> 8) & 0xff;
+  let offset = 2;
+  for (const event of events) {
+    const bytes = event.delay <= 127
+      ? [event.hid, event.delay | (event.down ? 0x80 : 0)]
+      : [event.hid, event.down ? 0x80 : 0, event.delay & 0xff, event.delay >> 8];
+    if (offset + bytes.length + 4 > output.length) throw new Error('宏内容过长，请缩短文本或减少大写/符号');
+    Buffer.from(bytes).copy(output, offset);
+    offset += bytes.length;
+  }
+  return { data: Array.from(output), eventCount: events.length, bytesUsed: offset };
+}
+
+async function writeMacroSlotRaw(slot, rawData) {
+  if (!Number.isInteger(slot) || slot < 0 || slot >= 50) throw new Error('宏槽编号无效');
+  if (!Array.isArray(rawData) || rawData.length !== 256 || rawData.some((value) => !Number.isInteger(value) || value < 0 || value > 255)) {
+    throw new Error('宏数据格式无效');
+  }
+  const receiver = findReceiver();
+  if (!receiver) throw new Error('未检测到 2.4G 接收器');
+  const device = new HID.HID(receiver.path);
+  try {
+    const status = await queryStatus(device);
+    if (!status.online || status.rfBoot) throw new Error('键盘未在线，请先唤醒键盘');
+    const lastNonZero = rawData.reduce((last, value, index) => value !== 0 ? index : last, 0);
+    const chunkCount = Math.max(1, Math.ceil((lastNonZero + 1) / 56));
+    for (let chunk = 0; chunk < chunkCount; chunk += 1) {
+      const command = Buffer.alloc(64);
+      command[0] = 0x0b;
+      command[1] = slot;
+      command[2] = chunk;
+      command[3] = 56;
+      command[4] = chunk === chunkCount - 1 ? 1 : 0;
+      Buffer.from(rawData.slice(chunk * 56, chunk * 56 + 56)).copy(command, 8);
+      if (!await keyboardWrite(device, command, 7)) throw new Error(`宏槽 ${slot} 分片 ${chunk + 1} 写入失败`);
+    }
+    const verified = await readMacroSlotFromDevice(device, slot);
+    const comparedLength = chunkCount * 56;
+    if (!Buffer.from(verified.slice(0, comparedLength)).equals(Buffer.from(rawData.slice(0, comparedLength)))) {
+      throw new Error('宏写入后的回读校验不一致');
+    }
+    return { slot, data: verified, chunkCount };
+  } finally {
+    device.close();
+  }
+}
+
+async function writeTextMacro(slot, text, keyDelay, repeatCount) {
+  const encoded = encodeMacroText(text, keyDelay, repeatCount);
+  const result = await writeMacroSlotRaw(slot, encoded.data);
+  return { ...result, eventCount: encoded.eventCount, bytesUsed: encoded.bytesUsed };
+}
+
 async function inspectKeymap() {
   const receiver = findReceiver();
   if (!receiver) throw new Error('未检测到 2.4G 接收器');
@@ -309,10 +479,13 @@ async function remapStandardKey(layer, physicalIndex, targetHid) {
 
 async function inspectKeyboard() {
   const receiver = findReceiver();
+  const usbPowerPresent = isUsbPowerPresent();
   if (!receiver) {
     return {
       receiverPresent: false,
       online: false,
+      usbPowerPresent,
+      chargingState: usbPowerPresent ? 'USB 供电中' : '未检测到 USB',
       model: '昔涟·往昔的涟漪',
       message: '未检测到 2.4G 接收器（3151:5052）'
     };
@@ -328,6 +501,8 @@ async function inspectKeyboard() {
       receiverPresent: true,
       online: status.online,
       battery: status.battery,
+      usbPowerPresent,
+      chargingState: usbPowerPresent ? 'USB 供电中' : '未检测到 USB',
       canRead: status.canRead,
       canSend: status.canSend,
       rfBoot: status.rfBoot,
@@ -354,6 +529,10 @@ module.exports = {
   inspectKeymap,
   remapStandardKey,
   writeKeyMatrixValue,
+  inspectMacroState,
+  writeTextMacro,
+  writeMacroSlotRaw,
+  encodeMacroText,
   MAIN_EFFECTS,
   SIDE_EFFECTS
 };

@@ -13,7 +13,6 @@
         <div>
           <p class="eyebrow">FULING OFFLINE CONSOLE · ALPHA</p>
           <h1>昔涟 · 往昔的涟漪</h1>
-          <p class="subtitle">独立 HID 连接，不加载网页，不上传设备数据。</p>
         </div>
         <div class="mode-pill">安全写入 · 自动备份</div>
       </header>
@@ -35,6 +34,11 @@
           <span>电量</span>
           <strong id="battery">--%</strong>
           <div class="battery-track"><i id="battery-fill"></i></div>
+        </article>
+        <article class="metric charging-metric">
+          <span>充电检测</span>
+          <strong id="charging-state">检测中…</strong>
+          <small id="charging-detail">检查有线接口 38A9:0017</small>
         </article>
         <article class="metric">
           <span>连接方式</span>
@@ -68,7 +72,22 @@
         </div>
       </section>
 
-      <section class="keymap-card">
+      <nav class="config-nav" aria-label="配置功能">
+        <div class="config-nav-heading">
+          <div>
+            <h2>配置功能</h2>
+            <p>选择一项功能，页面下方只显示当前配置面板。</p>
+          </div>
+        </div>
+        <div class="feature-row" role="tablist" aria-label="键盘配置面板">
+          <button class="available active" type="button" role="tab" aria-selected="true" aria-controls="keymap-panel" data-config-target="keymap-panel">按键映射 <small>标准单键映射</small></button>
+          <button class="available" type="button" role="tab" aria-selected="false" aria-controls="lighting-panel" data-config-target="lighting-panel">灯光控制 <small>主灯与侧灯</small></button>
+          <button class="available" type="button" role="tab" aria-selected="false" aria-controls="macro-panel" data-config-target="macro-panel">宏设置 <small>安全文本宏</small></button>
+          <button type="button" disabled>休眠设置 <small>协议验证中</small></button>
+        </div>
+      </nav>
+
+      <section class="keymap-card config-panel" id="keymap-panel" role="tabpanel">
         <div class="section-title">
           <div>
             <h2>按键映射</h2>
@@ -96,7 +115,42 @@
         <p class="operation-status" id="keymap-status">键盘在线后，点击“读取三层键位”。读取约需十几秒。</p>
       </section>
 
-      <section class="lighting-card" id="lighting-card">
+      <section class="macro-card config-panel" id="macro-panel" role="tabpanel" hidden>
+        <div class="section-title">
+          <div>
+            <h2>文本宏</h2>
+            <p>支持英文、数字、空格、换行和常用英文符号；写入前会扫描普通层与 Win/macOS Fn 层的宏引用。</p>
+          </div>
+          <div class="lighting-actions">
+            <button id="read-macro" type="button">扫描并备份宏</button>
+            <button id="restore-macro" class="secondary" type="button" disabled>恢复本次宏</button>
+          </div>
+        </div>
+        <fieldset class="macro-editor" id="macro-editor" disabled>
+          <label>配置层
+            <select id="macro-layer">
+              <option value="0">第 1 层</option>
+              <option value="1">第 2 层</option>
+              <option value="2">第 3 层</option>
+            </select>
+          </label>
+          <label>绑定物理按键<select id="macro-source"></select></label>
+          <label>播放方式
+            <select id="macro-type">
+              <option value="repeat">按下后播放指定次数</option>
+              <option value="hold">按住时重复播放</option>
+            </select>
+          </label>
+          <label>循环次数<input id="macro-repeat" type="number" min="1" max="20" value="1" /></label>
+          <label>按键间隔（毫秒）<input id="macro-delay" type="number" min="10" max="1000" value="35" /></label>
+          <label class="macro-text-label">宏文本<textarea id="macro-text" maxlength="80" rows="3" placeholder="例如：Hello 123"></textarea></label>
+          <button id="apply-macro" class="primary" type="button">写入宏并绑定</button>
+          <div class="macro-summary">可用槽位：<strong id="macro-slot">--</strong> · 已有引用：<strong id="macro-reference-count">--</strong></div>
+        </fieldset>
+        <p class="operation-status" id="macro-status">点击“扫描并备份宏”，读取过程约需半分钟，请保持键盘唤醒。</p>
+      </section>
+
+      <section class="lighting-card config-panel" id="lighting-panel" role="tabpanel" hidden>
         <div class="section-title">
           <div>
             <h2>灯光控制</h2>
@@ -130,16 +184,6 @@
         <p class="operation-status" id="lighting-status">键盘在线后，点击“读取灯效”。</p>
       </section>
 
-      <section class="locked-features">
-        <h2>配置功能</h2>
-        <div class="feature-row">
-          <button class="available" disabled>按键映射 <small>标准单键映射已开放</small></button>
-          <button class="available" disabled>灯光控制 <small>主灯与侧灯已开放</small></button>
-          <button disabled>宏设置 <small>协议验证中</small></button>
-          <button disabled>休眠设置 <small>协议验证中</small></button>
-        </div>
-        <p>当前已开放具备备份、回读校验和恢复流程的标准单键映射与灯光配置；宏和休眠功能仍保持锁定。</p>
-      </section>
     </main>
     <script src="app.js"></script>
   </body>

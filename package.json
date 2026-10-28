@@ -1,6 +1,6 @@
 {
   "name": "fuling-cyrene-driver",
-  "version": "0.3.0",
+  "version": "0.4.3",
   "description": "Experimental offline driver for the Fuling Cyrene keyboard.",
   "main": "main.js",
   "private": true,
@@ -30,6 +30,7 @@
       "main.js",
       "preload.js",
       "hid-service.js",
+      "assets/**/*",
       "renderer/**/*",
       "package.json"
     ],
@@ -37,6 +38,7 @@
       "output": "dist"
     },
     "win": {
+      "icon": "assets/icon.ico",
       "target": [
         {
           "target": "portable",

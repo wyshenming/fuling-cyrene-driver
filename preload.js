@@ -9,6 +9,9 @@ contextBridge.exposeInMainWorld('keyboardDriver', {
   restoreLighting: () => ipcRenderer.invoke('lighting:restore'),
   getKeymap: () => ipcRenderer.invoke('keymap:get'),
   applyKeymap: (layer, physicalIndex, targetHid) => ipcRenderer.invoke('keymap:apply', layer, physicalIndex, targetHid),
-  restoreKeymap: () => ipcRenderer.invoke('keymap:restore')
+  restoreKeymap: () => ipcRenderer.invoke('keymap:restore'),
+  getMacroState: () => ipcRenderer.invoke('macro:get'),
+  applyMacro: (options) => ipcRenderer.invoke('macro:apply', options),
+  restoreMacro: () => ipcRenderer.invoke('macro:restore')
 });
 

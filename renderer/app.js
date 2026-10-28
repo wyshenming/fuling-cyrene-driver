@@ -1,6 +1,8 @@
 'use strict';
 
 const elements = {
+  configTabs: Array.from(document.querySelectorAll('[data-config-target]')),
+  configPanels: Array.from(document.querySelectorAll('.config-panel')),
   button: document.getElementById('refresh-button'),
   dot: document.getElementById('status-dot'),
   orb: document.getElementById('device-orb'),
@@ -8,6 +10,8 @@ const elements = {
   message: document.getElementById('status-message'),
   battery: document.getElementById('battery'),
   batteryFill: document.getElementById('battery-fill'),
+  chargingState: document.getElementById('charging-state'),
+  chargingDetail: document.getElementById('charging-detail'),
   connection: document.getElementById('connection'),
   identity: document.getElementById('identity'),
   recognized: document.getElementById('recognized'),
@@ -29,10 +33,36 @@ const elements = {
   keymapTarget: document.getElementById('keymap-target'),
   applyKeymap: document.getElementById('apply-keymap'),
   keymapStatus: document.getElementById('keymap-status'),
-  currentBinding: document.getElementById('current-binding')
+  currentBinding: document.getElementById('current-binding'),
+  readMacro: document.getElementById('read-macro'),
+  restoreMacro: document.getElementById('restore-macro'),
+  macroEditor: document.getElementById('macro-editor'),
+  macroLayer: document.getElementById('macro-layer'),
+  macroSource: document.getElementById('macro-source'),
+  macroType: document.getElementById('macro-type'),
+  macroRepeat: document.getElementById('macro-repeat'),
+  macroDelay: document.getElementById('macro-delay'),
+  macroText: document.getElementById('macro-text'),
+  macroSlot: document.getElementById('macro-slot'),
+  macroReferenceCount: document.getElementById('macro-reference-count'),
+  applyMacro: document.getElementById('apply-macro'),
+  macroStatus: document.getElementById('macro-status')
 };
 
 let keymapData = null;
+let macroData = null;
+
+function activateConfigPanel(panelId) {
+  elements.configPanels.forEach((panel) => {
+    panel.hidden = panel.id !== panelId;
+  });
+  elements.configTabs.forEach((tab) => {
+    const active = tab.dataset.configTarget === panelId;
+    tab.classList.toggle('active', active);
+    tab.setAttribute('aria-selected', String(active));
+    tab.tabIndex = active ? 0 : -1;
+  });
+}
 
 const hidNames = {
   40: 'Enter', 41: 'Esc', 42: 'Backspace', 43: 'Tab', 44: 'Space',
@@ -157,6 +187,83 @@ async function restoreKeymap() {
   }
 }
 
+function setMacroStatus(message, kind = '') {
+  elements.macroStatus.textContent = message;
+  elements.macroStatus.className = `operation-status ${kind}`;
+}
+
+function renderMacroState(data) {
+  macroData = data;
+  elements.macroSource.replaceChildren();
+  for (let offset = 0; offset < data.defaultMatrix.length; offset += 4) {
+    const value = data.defaultMatrix.slice(offset, offset + 4);
+    if (!(value[0] === 0 && value[1] === 0 && value[2] !== 0 && value[3] === 0)) continue;
+    const option = document.createElement('option');
+    option.value = offset / 4;
+    option.textContent = `${matrixName(value)} · 槽位 ${offset / 4 + 1}`;
+    elements.macroSource.append(option);
+  }
+  elements.macroSlot.textContent = String(data.freeSlot);
+  elements.macroReferenceCount.textContent = String(data.references.length);
+  elements.macroEditor.disabled = false;
+  elements.restoreMacro.disabled = false;
+}
+
+async function readMacroState() {
+  elements.readMacro.disabled = true;
+  setMacroStatus('正在扫描普通三层、Win/macOS Fn 层和可用宏槽，请保持键盘唤醒…');
+  try {
+    const state = await window.keyboardDriver.getMacroState();
+    renderMacroState(state);
+    const residue = state.freeSlotData.filter((value) => value !== 0).length;
+    setMacroStatus(`扫描完成：已有 ${state.references.length} 个宏引用，可用槽 ${state.freeSlot}；槽内 ${residue} 个非零字节已原样备份。`, 'ok');
+  } catch (error) {
+    setMacroStatus(error?.message || String(error), 'error');
+  } finally {
+    elements.readMacro.disabled = false;
+  }
+}
+
+async function applyMacro() {
+  if (!macroData) return;
+  const text = elements.macroText.value;
+  if (!text) {
+    setMacroStatus('请先输入宏文本。', 'error');
+    return;
+  }
+  elements.applyMacro.disabled = true;
+  setMacroStatus('正在写入宏内容、绑定物理键并分别回读校验…');
+  try {
+    const result = await window.keyboardDriver.applyMacro({
+      layer: Number(elements.macroLayer.value),
+      physicalIndex: Number(elements.macroSource.value),
+      text,
+      keyDelay: Number(elements.macroDelay.value),
+      repeatCount: Number(elements.macroRepeat.value),
+      macroType: elements.macroType.value
+    });
+    elements.restoreMacro.disabled = false;
+    setMacroStatus(`宏已写入槽 ${result.macro.slot}：${result.macro.eventCount} 个动作、${result.macro.bytesUsed} 字节；键位绑定回读通过。`, 'ok');
+  } catch (error) {
+    setMacroStatus(error?.message || String(error), 'error');
+  } finally {
+    elements.applyMacro.disabled = false;
+  }
+}
+
+async function restoreMacro() {
+  elements.restoreMacro.disabled = true;
+  setMacroStatus('正在解除本次宏绑定并恢复宏槽原始数据…');
+  try {
+    const result = await window.keyboardDriver.restoreMacro();
+    setMacroStatus(result.restored ? '本次宏绑定和宏槽内容均已恢复，回读校验通过。' : '本次运行没有需要恢复的宏。', 'ok');
+  } catch (error) {
+    setMacroStatus(error?.message || String(error), 'error');
+  } finally {
+    elements.restoreMacro.disabled = false;
+  }
+}
+
 const effectLabels = {
   LightOff: '关闭', LightAlwaysOn: '常亮', LightBreath: '呼吸', LightNeon: '霓虹',
   LightWave: '波浪', LightRipple: '涟漪', LightRaindrop: '雨滴', LightSnake: '贪吃蛇',
@@ -274,6 +381,9 @@ function render(data) {
   elements.message.textContent = data.message || '未能读取设备状态';
   elements.battery.textContent = Number.isFinite(data.battery) ? `${data.battery}%` : '--%';
   elements.batteryFill.style.width = Number.isFinite(data.battery) ? `${Math.max(0, Math.min(100, data.battery))}%` : '0%';
+  elements.chargingState.textContent = data.chargingState || '未知';
+  elements.chargingDetail.textContent = data.usbPowerPresent ? '已检测到键盘有线接口' : '未检测到有线充电连接';
+  elements.chargingState.closest('.metric').classList.toggle('powered', Boolean(data.usbPowerPresent));
   elements.connection.textContent = data.connection || '--';
   elements.identity.textContent = data.identityHex || '--------';
   elements.recognized.textContent = data.recognized ? '已匹配内部设备 ID 4112' : (online ? '型号尚未匹配' : '等待键盘唤醒');
@@ -295,6 +405,22 @@ async function refresh() {
   }
 }
 
+elements.configTabs.forEach((tab, index) => {
+  tab.addEventListener('click', () => activateConfigPanel(tab.dataset.configTarget));
+  tab.addEventListener('keydown', (event) => {
+    if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+    event.preventDefault();
+    let nextIndex = index;
+    if (event.key === 'ArrowLeft') nextIndex = (index - 1 + elements.configTabs.length) % elements.configTabs.length;
+    if (event.key === 'ArrowRight') nextIndex = (index + 1) % elements.configTabs.length;
+    if (event.key === 'Home') nextIndex = 0;
+    if (event.key === 'End') nextIndex = elements.configTabs.length - 1;
+    const nextTab = elements.configTabs[nextIndex];
+    activateConfigPanel(nextTab.dataset.configTarget);
+    nextTab.focus();
+  });
+});
+
 elements.button.addEventListener('click', refresh);
 elements.readLighting.addEventListener('click', readLighting);
 elements.restoreLighting.addEventListener('click', restoreLighting);
@@ -305,6 +431,14 @@ elements.applyKeymap.addEventListener('click', applyKeymap);
 elements.restoreKeymap.addEventListener('click', restoreKeymap);
 elements.keymapLayer.addEventListener('change', renderCurrentBinding);
 elements.keymapSource.addEventListener('change', renderCurrentBinding);
+elements.readMacro.addEventListener('click', readMacroState);
+elements.applyMacro.addEventListener('click', applyMacro);
+elements.restoreMacro.addEventListener('click', restoreMacro);
+elements.macroType.addEventListener('change', () => {
+  const hold = elements.macroType.value === 'hold';
+  elements.macroRepeat.disabled = hold;
+  if (hold) elements.macroRepeat.value = '1';
+});
 for (const channel of ['main', 'side']) {
   for (const property of ['bright', 'speed']) {
     const input = document.getElementById(`${channel}-${property}`);
