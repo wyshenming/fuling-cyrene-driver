@@ -24,13 +24,13 @@
             <span class="dot" id="status-dot"></span>
             <strong id="status-title">正在检测设备…</strong>
           </div>
-          <p id="status-message">正在读取接收器状态与键盘身份。</p>
+          <p id="status-message">正在读取有线或无线设备状态与键盘身份。</p>
         </div>
         <button id="refresh-button" type="button">重新检测</button>
       </section>
 
       <section class="grid">
-        <article class="metric">
+        <article class="metric battery-metric" id="battery-metric">
           <span>电量</span>
           <strong id="battery">--%</strong>
           <div class="battery-track"><i id="battery-fill"></i></div>
@@ -43,7 +43,7 @@
         <article class="metric">
           <span>连接方式</span>
           <strong id="connection">--</strong>
-          <small>当前试用版读取 2.4G 接收器</small>
+          <small id="connection-detail">正在选择传输链路</small>
         </article>
         <article class="metric">
           <span>内部设备 ID</span>
@@ -51,9 +51,9 @@
           <small id="recognized">等待识别</small>
         </article>
         <article class="metric">
-          <span>接收器</span>
-          <strong id="receiver">3151:5052</strong>
-          <small id="receiver-state">正在检测</small>
+          <span id="transport-label">设备接口</span>
+          <strong id="transport-id">----:----</strong>
+          <small id="transport-state">正在检测</small>
         </article>
       </section>
 
@@ -83,7 +83,7 @@
           <button class="available active" type="button" role="tab" aria-selected="true" aria-controls="keymap-panel" data-config-target="keymap-panel">按键映射 <small>标准单键映射</small></button>
           <button class="available" type="button" role="tab" aria-selected="false" aria-controls="lighting-panel" data-config-target="lighting-panel">灯光控制 <small>主灯与侧灯</small></button>
           <button class="available" type="button" role="tab" aria-selected="false" aria-controls="macro-panel" data-config-target="macro-panel">宏设置 <small>安全文本宏</small></button>
-          <button type="button" disabled>休眠设置 <small>协议验证中</small></button>
+          <button class="available" type="button" role="tab" aria-selected="false" aria-controls="sleep-panel" data-config-target="sleep-panel">休眠设置 <small>2.4G 与蓝牙</small></button>
         </div>
       </nav>
 
@@ -182,6 +182,41 @@
           </fieldset>
         </div>
         <p class="operation-status" id="lighting-status">键盘在线后，点击“读取灯效”。</p>
+      </section>
+
+      <section class="sleep-card config-panel" id="sleep-panel" role="tabpanel" hidden>
+        <div class="section-title">
+          <div>
+            <h2>休眠时间</h2>
+            <p>分别设置 2.4G 与蓝牙的空闲休眠；首次读取会备份四项固件参数。</p>
+          </div>
+          <div class="lighting-actions">
+            <button id="read-sleep" type="button">读取并备份</button>
+            <button id="restore-sleep" class="secondary" type="button" disabled>恢复启动时设置</button>
+          </div>
+        </div>
+        <fieldset class="sleep-editor" id="sleep-editor" disabled>
+          <label>2.4G 空闲休眠
+            <select id="sleep-24">
+              <option value="60">1 分钟</option><option value="120">2 分钟</option><option value="300">5 分钟</option>
+              <option value="600">10 分钟</option><option value="900">15 分钟</option><option value="1800">30 分钟</option><option value="3600">60 分钟</option>
+            </select>
+          </label>
+          <label>蓝牙空闲休眠
+            <select id="sleep-bt">
+              <option value="60">1 分钟</option><option value="120">2 分钟</option><option value="300">5 分钟</option>
+              <option value="600">10 分钟</option><option value="900">15 分钟</option><option value="1800">30 分钟</option><option value="3600">60 分钟</option>
+            </select>
+          </label>
+          <label>蓝牙深度休眠
+            <select id="sleep-deep-bt">
+              <option value="600">10 分钟</option><option value="900">15 分钟</option><option value="1800">30 分钟</option><option value="3600">60 分钟</option>
+            </select>
+          </label>
+          <button id="apply-sleep" class="primary" type="button">应用并校验</button>
+          <div class="sleep-summary">2.4G 深度休眠保留值：<strong id="sleep-deep-24">--</strong></div>
+        </fieldset>
+        <p class="operation-status" id="sleep-status">键盘在线时，点击“读取并备份”。</p>
       </section>
 
     </main>

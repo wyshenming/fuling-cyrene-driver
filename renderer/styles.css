@@ -32,18 +32,18 @@ body {
 
 .shell {
   position: relative;
-  width: min(1120px, calc(100% - 56px));
+  width: 1120px;
   margin: 0 auto;
   padding: 42px 0 48px;
 }
 
 .hero { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; }
 .eyebrow { color: #9d8cff; font-size: 12px; font-weight: 700; letter-spacing: .2em; margin: 0 0 12px; }
-h1 { margin: 0; font-size: clamp(32px, 4vw, 52px); font-weight: 730; letter-spacing: -.04em; }
+h1 { margin: 0; font-size: 48px; font-weight: 730; letter-spacing: -.04em; }
 .subtitle { color: #aaa2c5; margin: 12px 0 0; font-size: 15px; }
 .mode-pill { border: 1px solid rgba(155, 138, 255, .42); border-radius: 999px; background: rgba(89, 65, 194, .18); color: #c9beff; padding: 10px 15px; font-size: 13px; }
 
-.status-card, .details-card, .metric, .config-nav, .lighting-card, .keymap-card, .macro-card {
+.status-card, .details-card, .metric, .config-nav, .lighting-card, .keymap-card, .macro-card, .sleep-card {
   border: 1px solid rgba(174, 159, 255, .15);
   background: rgba(19, 16, 43, .76);
   box-shadow: 0 22px 60px rgba(0, 0, 0, .24), inset 0 1px rgba(255, 255, 255, .035);
@@ -72,7 +72,14 @@ button.secondary:disabled, #read-lighting:disabled, #read-keymap:disabled, #read
 .metric strong { margin-top: 14px; font-size: 27px; font-weight: 650; }
 .metric small { color: #817a94; margin-top: auto; line-height: 1.35; }
 .battery-track { height: 4px; margin-top: auto; border-radius: 99px; background: #2c2842; overflow: hidden; }
-.battery-track i { display: block; width: 0; height: 100%; background: linear-gradient(90deg, #7061ff, #58e5cf); transition: width .35s ease; }
+.battery-track i { display: block; width: 0; height: 100%; background: linear-gradient(90deg, #7061ff, #58e5cf); transition: width .35s ease, background .35s ease, box-shadow .35s ease; }
+.battery-metric strong { transition: color .35s ease, text-shadow .35s ease; }
+.battery-metric.battery-high strong { color: #68e6a2; text-shadow: 0 0 18px rgba(70, 215, 139, .18); }
+.battery-metric.battery-high .battery-track i { background: linear-gradient(90deg, #35b86f, #79efaa); box-shadow: 0 0 10px rgba(88, 229, 152, .45); }
+.battery-metric.battery-medium strong { color: #f3cf62; text-shadow: 0 0 18px rgba(243, 207, 98, .17); }
+.battery-metric.battery-medium .battery-track i { background: linear-gradient(90deg, #d99c32, #f3dd70); box-shadow: 0 0 10px rgba(243, 207, 98, .42); }
+.battery-metric.battery-low strong { color: #ff7189; text-shadow: 0 0 18px rgba(255, 83, 112, .2); }
+.battery-metric.battery-low .battery-track i { background: linear-gradient(90deg, #dc3553, #ff7b83); box-shadow: 0 0 10px rgba(255, 83, 112, .48); }
 .charging-metric { position: relative; }
 .charging-metric strong { font-size: 21px; }
 .charging-metric.powered strong { color: #58e5cf; }
@@ -137,15 +144,11 @@ button.secondary:disabled, #read-lighting:disabled, #read-keymap:disabled, #read
 .macro-summary { grid-column: 3 / -1; align-self: center; color: #8d86a2; font-size: 12px; text-align: right; }
 .macro-summary strong { color: #d8d0ff; }
 
-@media (max-width: 900px) {
-  .grid { grid-template-columns: repeat(2, 1fr); }
-  .details-card { grid-template-columns: 1fr; }
-  .feature-row { grid-template-columns: repeat(2, 1fr); }
-  .light-grid { grid-template-columns: 1fr; }
-  .section-title { flex-direction: column; }
-  .keymap-editor { grid-template-columns: 1fr; align-items: stretch; }
-  .mapping-arrow { display: none; }
-  .macro-editor { grid-template-columns: 1fr; }
-  .macro-text-label, .macro-editor .primary, .macro-summary { grid-column: 1; }
-  .macro-summary { text-align: left; }
-}
+.sleep-card { margin-top: 14px; border-radius: 18px; padding: 20px; }
+.sleep-editor { margin: 18px 0 0; padding: 18px; border: 1px solid rgba(164,149,255,.16); border-radius: 15px; display: grid; grid-template-columns: repeat(3, 1fr) auto; gap: 12px; align-items: end; background: rgba(255,255,255,.022); }
+.sleep-editor:disabled { opacity: .45; }
+.sleep-editor label { display: flex; flex-direction: column; gap: 8px; color: #aaa2c5; font-size: 12px; }
+.sleep-editor select { width: 100%; border: 1px solid rgba(164,149,255,.2); border-radius: 9px; padding: 10px; color: #f4efff; background: #17132e; }
+.sleep-editor .primary { border: 1px solid rgba(88,229,207,.3); border-radius: 10px; padding: 10px 14px; color: #f7f3ff; background: linear-gradient(90deg, #43359a, #246b74); cursor: pointer; white-space: nowrap; }
+.sleep-summary { grid-column: 1 / -1; color: #8d86a2; font-size: 12px; }
+.sleep-summary strong { color: #d8d0ff; }

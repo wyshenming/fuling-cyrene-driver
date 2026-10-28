@@ -3,6 +3,7 @@
 const path = require('path');
 const fs = require('fs/promises');
 const { app, BrowserWindow, ipcMain, Menu } = require('electron');
+const { DESIGN_WIDTH, DESIGN_HEIGHT, fitWindowScale } = require('./window-scale');
 const {
   inspectKeyboard,
   inspectLighting,
@@ -12,7 +13,9 @@ const {
   writeKeyMatrixValue,
   inspectMacroState,
   writeTextMacro,
-  writeMacroSlotRaw
+  writeMacroSlotRaw,
+  inspectSleepTime,
+  writeSleepTime
 } = require('./hid-service');
 
 let mainWindow = null;
@@ -21,6 +24,7 @@ let originalKeymap = null;
 const changedKeys = new Set();
 let originalMacroState = null;
 let macroBinding = null;
+let originalSleepTime = null;
 let hidQueue = Promise.resolve();
 
 function withHidLock(operation) {
@@ -80,12 +84,34 @@ async function readAndRememberMacroState() {
   return state;
 }
 
+async function backupSleepTime(state) {
+  const directory = path.join(app.getPath('userData'), 'sleep-backups');
+  await fs.mkdir(directory, { recursive: true });
+  const capturedAt = new Date().toISOString();
+  const backup = { deviceId: 4112, protocol: 'ry6602_fl_k2509_3m_1k_1k', capturedAt, ...state };
+  const safeStamp = capturedAt.replaceAll(':', '-');
+  await fs.writeFile(path.join(directory, `sleep-${safeStamp}.json`), JSON.stringify(backup, null, 2), 'utf8');
+  await fs.writeFile(path.join(directory, 'latest.json'), JSON.stringify(backup, null, 2), 'utf8');
+  return backup;
+}
+
+async function readAndRememberSleepTime() {
+  const state = await inspectSleepTime();
+  if (!originalSleepTime) {
+    await backupSleepTime(state);
+    originalSleepTime = { ...state };
+  }
+  return state;
+}
+
 function createWindow() {
   mainWindow = new BrowserWindow({
-    width: 1180,
-    height: 760,
+    width: DESIGN_WIDTH,
+    height: DESIGN_HEIGHT,
+    useContentSize: true,
     minWidth: 940,
     minHeight: 640,
+    show: false,
     title: '昔涟键盘控制台',
     icon: path.join(__dirname, 'assets', 'icon.png'),
     backgroundColor: '#090818',
@@ -101,6 +127,14 @@ function createWindow() {
 
   mainWindow.setMenu(Menu.buildFromTemplate([]));
   mainWindow.loadFile(path.join(__dirname, 'renderer', 'index.html'));
+  mainWindow.once('ready-to-show', () => {
+    fitWindowScale(mainWindow);
+    mainWindow.show();
+  });
+  mainWindow.on('resize', () => fitWindowScale(mainWindow));
+  mainWindow.webContents.on('before-input-event', (event, input) => {
+    if (input.control && ['+', '-', '=', '0'].includes(input.key)) event.preventDefault();
+  });
   mainWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   mainWindow.on('closed', () => { mainWindow = null; });
 }
@@ -185,6 +219,15 @@ ipcMain.handle('macro:restore', async () => withHidLock(async () => {
   }
   macroBinding = null;
   return { restored: true, binding, macro, verifiedKey };
+}));
+ipcMain.handle('sleep:get', async () => withHidLock(readAndRememberSleepTime));
+ipcMain.handle('sleep:apply', async (_event, settings) => withHidLock(async () => {
+  if (!originalSleepTime) await readAndRememberSleepTime();
+  return writeSleepTime(settings);
+}));
+ipcMain.handle('sleep:restore', async () => withHidLock(async () => {
+  if (!originalSleepTime) throw new Error('本次运行尚未建立休眠时间备份');
+  return writeSleepTime(originalSleepTime);
 }));
 
 app.whenReady().then(createWindow);

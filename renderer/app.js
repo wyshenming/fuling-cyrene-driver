@@ -9,13 +9,17 @@ const elements = {
   title: document.getElementById('status-title'),
   message: document.getElementById('status-message'),
   battery: document.getElementById('battery'),
+  batteryMetric: document.getElementById('battery-metric'),
   batteryFill: document.getElementById('battery-fill'),
   chargingState: document.getElementById('charging-state'),
   chargingDetail: document.getElementById('charging-detail'),
   connection: document.getElementById('connection'),
+  connectionDetail: document.getElementById('connection-detail'),
   identity: document.getElementById('identity'),
   recognized: document.getElementById('recognized'),
-  receiverState: document.getElementById('receiver-state'),
+  transportLabel: document.getElementById('transport-label'),
+  transportId: document.getElementById('transport-id'),
+  transportState: document.getElementById('transport-state'),
   hardware: document.getElementById('hardware-profile'),
   protocol: document.getElementById('protocol'),
   readLighting: document.getElementById('read-lighting'),
@@ -46,11 +50,21 @@ const elements = {
   macroSlot: document.getElementById('macro-slot'),
   macroReferenceCount: document.getElementById('macro-reference-count'),
   applyMacro: document.getElementById('apply-macro'),
-  macroStatus: document.getElementById('macro-status')
+  macroStatus: document.getElementById('macro-status'),
+  readSleep: document.getElementById('read-sleep'),
+  restoreSleep: document.getElementById('restore-sleep'),
+  sleepEditor: document.getElementById('sleep-editor'),
+  sleep24: document.getElementById('sleep-24'),
+  sleepBt: document.getElementById('sleep-bt'),
+  sleepDeepBt: document.getElementById('sleep-deep-bt'),
+  sleepDeep24: document.getElementById('sleep-deep-24'),
+  applySleep: document.getElementById('apply-sleep'),
+  sleepStatus: document.getElementById('sleep-status')
 };
 
 let keymapData = null;
 let macroData = null;
+let sleepData = null;
 
 function activateConfigPanel(panelId) {
   elements.configPanels.forEach((panel) => {
@@ -62,6 +76,86 @@ function activateConfigPanel(panelId) {
     tab.setAttribute('aria-selected', String(active));
     tab.tabIndex = active ? 0 : -1;
   });
+}
+
+function setSleepStatus(message, kind = '') {
+  elements.sleepStatus.textContent = message;
+  elements.sleepStatus.className = `operation-status ${kind}`;
+}
+
+function formatDuration(seconds) {
+  if (!Number.isFinite(seconds)) return '--';
+  if (seconds % 60 === 0) return `${seconds / 60} 分钟`;
+  return `${seconds} 秒`;
+}
+
+function selectDuration(select, seconds) {
+  const value = String(seconds);
+  if (![...select.options].some((option) => option.value === value)) {
+    const option = document.createElement('option');
+    option.value = value;
+    option.textContent = `${formatDuration(seconds)}（当前值）`;
+    select.append(option);
+  }
+  select.value = value;
+}
+
+function renderSleepTime(data) {
+  sleepData = data;
+  selectDuration(elements.sleep24, data.time24);
+  selectDuration(elements.sleepBt, data.timeBt);
+  selectDuration(elements.sleepDeepBt, data.deepTimeBt);
+  elements.sleepDeep24.textContent = formatDuration(data.deepTime24);
+  elements.sleepEditor.disabled = false;
+  elements.restoreSleep.disabled = false;
+}
+
+async function readSleepTime() {
+  elements.readSleep.disabled = true;
+  setSleepStatus('正在读取并备份休眠时间…');
+  try {
+    const data = await window.keyboardDriver.getSleepTime();
+    renderSleepTime(data);
+    setSleepStatus(`读取成功：2.4G ${formatDuration(data.time24)}，蓝牙 ${formatDuration(data.timeBt)}，蓝牙深度休眠 ${formatDuration(data.deepTimeBt)}。已建立备份。`, 'ok');
+  } catch (error) {
+    setSleepStatus(error?.message || String(error), 'error');
+  } finally {
+    elements.readSleep.disabled = false;
+  }
+}
+
+async function applySleepTime() {
+  if (!sleepData) return;
+  elements.applySleep.disabled = true;
+  setSleepStatus('正在写入休眠时间并回读校验…');
+  try {
+    const data = await window.keyboardDriver.applySleepTime({
+      time24: Number(elements.sleep24.value),
+      timeBt: Number(elements.sleepBt.value),
+      deepTimeBt: Number(elements.sleepDeepBt.value),
+      deepTime24: sleepData.deepTime24
+    });
+    renderSleepTime(data);
+    setSleepStatus('休眠时间已写入并通过回读校验。', 'ok');
+  } catch (error) {
+    setSleepStatus(error?.message || String(error), 'error');
+  } finally {
+    elements.applySleep.disabled = false;
+  }
+}
+
+async function restoreSleepTime() {
+  elements.restoreSleep.disabled = true;
+  setSleepStatus('正在恢复本次启动时的休眠时间…');
+  try {
+    const data = await window.keyboardDriver.restoreSleepTime();
+    renderSleepTime(data);
+    setSleepStatus('已恢复启动时的休眠时间，并通过回读校验。', 'ok');
+  } catch (error) {
+    setSleepStatus(error?.message || String(error), 'error');
+  } finally {
+    elements.restoreSleep.disabled = false;
+  }
 }
 
 const hidNames = {
@@ -375,19 +469,33 @@ async function restoreLighting() {
 
 function render(data) {
   const online = Boolean(data.online);
+  const battery = Number.isFinite(data.battery) ? Math.max(0, Math.min(100, data.battery)) : null;
+  const batteryLevel = battery == null ? null : (battery >= 60 ? 'high' : (battery > 20 ? 'medium' : 'low'));
   elements.dot.classList.toggle('online', online);
   elements.orb.classList.toggle('online', online);
   elements.title.textContent = online ? '昔涟键盘已连接' : '键盘未在线';
   elements.message.textContent = data.message || '未能读取设备状态';
-  elements.battery.textContent = Number.isFinite(data.battery) ? `${data.battery}%` : '--%';
-  elements.batteryFill.style.width = Number.isFinite(data.battery) ? `${Math.max(0, Math.min(100, data.battery))}%` : '0%';
+  elements.battery.textContent = battery == null ? '--%' : `${battery}%`;
+  elements.batteryFill.style.width = battery == null ? '0%' : `${battery}%`;
+  elements.batteryMetric.classList.remove('battery-high', 'battery-medium', 'battery-low');
+  if (batteryLevel) elements.batteryMetric.classList.add(`battery-${batteryLevel}`);
   elements.chargingState.textContent = data.chargingState || '未知';
   elements.chargingDetail.textContent = data.usbPowerPresent ? '已检测到键盘有线接口' : '未检测到有线充电连接';
   elements.chargingState.closest('.metric').classList.toggle('powered', Boolean(data.usbPowerPresent));
   elements.connection.textContent = data.connection || '--';
+  elements.connectionDetail.textContent = data.connection === 'USB'
+    ? '当前使用 USB 有线直连'
+    : (data.connection === '2.4G' ? '当前使用 2.4G 接收器' : '等待选择传输链路');
   elements.identity.textContent = data.identityHex || '--------';
   elements.recognized.textContent = data.recognized ? '已匹配内部设备 ID 4112' : (online ? '型号尚未匹配' : '等待键盘唤醒');
-  elements.receiverState.textContent = data.receiverPresent ? '接收器已连接' : '未检测到接收器';
+  const wired = data.connection === 'USB';
+  elements.transportLabel.textContent = wired ? '有线设备' : '接收器';
+  elements.transportId.textContent = data.vid && data.pid
+    ? `${data.vid.replace(/^0x/, '')}:${data.pid.replace(/^0x/, '')}`
+    : '----:----';
+  elements.transportState.textContent = wired
+    ? 'USB 控制接口已连接'
+    : (data.receiverPresent ? '接收器已连接' : '未检测到接收器');
   elements.hardware.textContent = data.hardwareProfile || '等待识别';
   elements.protocol.textContent = data.protocol || '等待识别';
 }
@@ -434,6 +542,9 @@ elements.keymapSource.addEventListener('change', renderCurrentBinding);
 elements.readMacro.addEventListener('click', readMacroState);
 elements.applyMacro.addEventListener('click', applyMacro);
 elements.restoreMacro.addEventListener('click', restoreMacro);
+elements.readSleep.addEventListener('click', readSleepTime);
+elements.applySleep.addEventListener('click', applySleepTime);
+elements.restoreSleep.addEventListener('click', restoreSleepTime);
 elements.macroType.addEventListener('change', () => {
   const hold = elements.macroType.value === 'hold';
   elements.macroRepeat.disabled = hold;

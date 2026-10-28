@@ -12,6 +12,9 @@ contextBridge.exposeInMainWorld('keyboardDriver', {
   restoreKeymap: () => ipcRenderer.invoke('keymap:restore'),
   getMacroState: () => ipcRenderer.invoke('macro:get'),
   applyMacro: (options) => ipcRenderer.invoke('macro:apply', options),
-  restoreMacro: () => ipcRenderer.invoke('macro:restore')
+  restoreMacro: () => ipcRenderer.invoke('macro:restore'),
+  getSleepTime: () => ipcRenderer.invoke('sleep:get'),
+  applySleepTime: (settings) => ipcRenderer.invoke('sleep:apply', settings),
+  restoreSleepTime: () => ipcRenderer.invoke('sleep:restore')
 });
 
